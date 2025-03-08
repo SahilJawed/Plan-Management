@@ -10,206 +10,250 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Card Matching Game',
+      title: 'Adoption & Travel Planner',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const CardGameScreen(),
+      home: const PlanManagerScreen(),
     );
   }
 }
 
-// Card model
-class CardModel {
-  final String frontImage; // Unique identifier for the front
-  bool isFaceUp;
-  bool isMatched;
+// Plan model
+class Plan {
+  String name;
+  String description;
+  DateTime date;
+  bool isCompleted;
+  String priority; // For extra task (graduate students)
 
-  CardModel({
-    required this.frontImage,
-    this.isFaceUp = false,
-    this.isMatched = false,
+  Plan({
+    required this.name,
+    required this.description,
+    required this.date,
+    this.isCompleted = false,
+    this.priority = 'Medium', // Default priority
   });
 }
 
-class CardGameScreen extends StatefulWidget {
-  const CardGameScreen({super.key});
+class PlanManagerScreen extends StatefulWidget {
+  const PlanManagerScreen({super.key});
 
   @override
-  _CardGameScreenState createState() => _CardGameScreenState();
+  _PlanManagerScreenState createState() => _PlanManagerScreenState();
 }
 
-class _CardGameScreenState extends State<CardGameScreen>
-    with SingleTickerProviderStateMixin {
-  late List<CardModel> cards;
-  int? firstCardIndex; // Index of the first tapped card
-  int? secondCardIndex; // Index of the second tapped card
-  bool isChecking = false; // Flag to prevent multiple taps during check
-  bool gameWon = false;
+class _PlanManagerScreenState extends State<PlanManagerScreen> {
+  List<Plan> plans = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeGame();
-  }
-
-  void _initializeGame() {
-    // Create 8 unique pairs for a 4x4 grid (16 cards total)
-    final List<String> images = List.generate(8, (index) => 'asset_$index')
-      ..addAll(
-        List.generate(8, (index) => 'asset_$index'),
-      ); // Duplicate for pairs
-    images.shuffle();
-
-    cards = images.map((img) => CardModel(frontImage: img)).toList();
-    firstCardIndex = null;
-    secondCardIndex = null;
-    isChecking = false;
-    gameWon = false;
-    print('Game initialized with ${cards.length} cards');
-  }
-
-  void _checkMatch() {
-    print(
-      'Checking match: firstCardIndex=$firstCardIndex, secondCardIndex=$secondCardIndex',
-    );
-    if (firstCardIndex != null && secondCardIndex != null) {
-      print(
-        'First card: ${cards[firstCardIndex!].frontImage}, Second card: ${cards[secondCardIndex!].frontImage}',
+  // Method to add a new plan
+  void _addPlan(
+    String name,
+    String description,
+    DateTime date,
+    String priority,
+  ) {
+    setState(() {
+      plans.add(
+        Plan(
+          name: name,
+          description: description,
+          date: date,
+          priority: priority,
+        ),
       );
-      isChecking = true; // Lock further taps during check
-
-      if (cards[firstCardIndex!].frontImage ==
-          cards[secondCardIndex!].frontImage) {
-        // Match found: Keep cards face-up and mark as matched
-        print('Match found!');
-        setState(() {
-          cards[firstCardIndex!].isMatched = true;
-          cards[secondCardIndex!].isMatched = true;
-        });
-        _checkWinCondition();
-        isChecking = false; // Unlock taps after match
-        firstCardIndex = null;
-        secondCardIndex = null;
-      } else {
-        // No match: Flip cards face-down after a delay
-        print('No match. Scheduling flip back after 1 second.');
-        final int firstIdx = firstCardIndex!;
-        final int secondIdx = secondCardIndex!;
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          setState(() {
-            cards[firstIdx].isFaceUp = false;
-            cards[secondIdx].isFaceUp = false;
-          });
-          print(
-            'Cards flipped back: ${cards[firstIdx].isFaceUp}, ${cards[secondIdx].isFaceUp}',
-          );
-          isChecking = false; // Unlock taps after flip
-          firstCardIndex = null;
-          secondCardIndex = null;
-        });
-      }
-    }
+      _sortPlansByPriority(); // Sort after adding (for extra task)
+    });
   }
 
-  void _checkWinCondition() {
-    if (cards.every((card) => card.isMatched)) {
-      gameWon = true;
-      setState(() {});
-      _showWinDialog();
-    }
+  // Method to update a plan
+  void _updatePlan(
+    int index,
+    String name,
+    String description,
+    DateTime date,
+    String priority,
+  ) {
+    setState(() {
+      plans[index].name = name;
+      plans[index].description = description;
+      plans[index].date = date;
+      plans[index].priority = priority;
+      _sortPlansByPriority(); // Sort after updating (for extra task)
+    });
   }
 
-  void _showWinDialog() {
-    showDialog(
+  // Method to toggle completion status
+  void _toggleCompletion(int index) {
+    setState(() {
+      plans[index].isCompleted = !plans[index].isCompleted;
+    });
+  }
+
+  // Method to delete a plan
+  void _deletePlan(int index) {
+    setState(() {
+      plans.removeAt(index);
+    });
+  }
+
+  // Sort plans by priority (High > Medium > Low)
+  void _sortPlansByPriority() {
+    setState(() {
+      plans.sort((a, b) {
+        const priorityOrder = {'High': 0, 'Medium': 1, 'Low': 2};
+        return priorityOrder[a.priority]!.compareTo(priorityOrder[b.priority]!);
+      });
+    });
+  }
+
+  // Show modal to create or edit a plan
+  void _showPlanModal({Plan? plan, int? index}) {
+    final isEditing = plan != null;
+    final nameController = TextEditingController(text: plan?.name ?? '');
+    final descController = TextEditingController(text: plan?.description ?? '');
+    DateTime selectedDate = plan?.date ?? DateTime.now();
+    String selectedPriority = plan?.priority ?? 'Medium';
+
+    showModalBottomSheet(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Victory!'),
-            content: const Text('You won!'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _initializeGame();
-                  setState(() {});
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Plan Name'),
+              ),
+              TextField(
+                controller: descController,
+                decoration: const InputDecoration(labelText: 'Description'),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Text('Date: '),
+                  TextButton(
+                    onPressed: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (pickedDate != null) {
+                        setState(() => selectedDate = pickedDate);
+                      }
+                    },
+                    child: Text('${selectedDate.toLocal()}'.split(' ')[0]),
+                  ),
+                ],
+              ),
+              DropdownButton<String>(
+                value: selectedPriority,
+                items:
+                    ['Low', 'Medium', 'High']
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
+                onChanged: (value) {
+                  setState(() => selectedPriority = value!);
                 },
-                child: const Text('Restart'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (nameController.text.isNotEmpty) {
+                    if (isEditing && index != null) {
+                      _updatePlan(
+                        index,
+                        nameController.text,
+                        descController.text,
+                        selectedDate,
+                        selectedPriority,
+                      );
+                    } else {
+                      _addPlan(
+                        nameController.text,
+                        descController.text,
+                        selectedDate,
+                        selectedPriority,
+                      );
+                    }
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(isEditing ? 'Update Plan' : 'Create Plan'),
               ),
             ],
           ),
+        );
+      },
     );
-  }
-
-  void _onCardTap(int index) {
-    print(
-      'Tapped card at index $index: isFaceUp=${cards[index].isFaceUp}, isMatched=${cards[index].isMatched}, isChecking=$isChecking',
-    );
-    // Prevent tapping if checking, matched, or already face-up
-    if (isChecking || cards[index].isMatched || cards[index].isFaceUp) {
-      print(
-        'Tap blocked due to: isChecking=$isChecking, isMatched=${cards[index].isMatched}, isFaceUp=${cards[index].isFaceUp}',
-      );
-      return;
-    }
-
-    setState(() {
-      cards[index].isFaceUp = true; // Flip the card face-up
-      print('Card $index flipped face-up');
-    });
-
-    if (firstCardIndex == null) {
-      // First card tapped
-      firstCardIndex = index;
-      print('First card selected: $firstCardIndex');
-    } else {
-      // Second card tapped
-      secondCardIndex = index;
-      print('Second card selected: $secondCardIndex');
-      _checkMatch(); // Check if they match
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Card Matching Game')),
+      appBar: AppBar(title: const Text('Adoption & Travel Planner')),
       body: Column(
         children: [
+          // Placeholder for drag-and-drop calendar (to be implemented)
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text('Interactive Calendar (Drag Plans Here)'),
+          ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(8.0),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 8.0,
-                mainAxisSpacing: 8.0,
-              ),
-              itemCount: cards.length,
+            child: ListView.builder(
+              itemCount: plans.length,
               itemBuilder: (context, index) {
-                return GestureDetector(
-                  onTap: () => _onCardTap(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 500),
-                    transform:
-                        cards[index].isFaceUp
-                            ? (Matrix4.identity()..rotateY(0))
-                            : (Matrix4.identity()..rotateY(-3.14159)),
-                    transformAlignment: Alignment.center,
-                    child: Card(
-                      color:
-                          cards[index].isMatched ? Colors.green : Colors.grey,
-                      child: Center(
-                        child:
-                            cards[index].isFaceUp || cards[index].isMatched
-                                ? Text(
-                                  cards[index].frontImage,
-                                  style: const TextStyle(fontSize: 20),
-                                )
-                                : Image.asset(
-                                  'assets/images/Card.webp', // Back design
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                ),
+                final plan = plans[index];
+                return Dismissible(
+                  key: Key(plan.name + index.toString()), // Ensure unique key
+                  confirmDismiss: (direction) async {
+                    // Toggle completion status instead of dismissing
+                    _toggleCompletion(index);
+                    return false; // Prevent the Dismissible from being removed
+                  },
+                  background: Container(
+                    color: Colors.green,
+                    child: const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 20.0),
+                        child: Icon(Icons.check, color: Colors.white),
                       ),
+                    ),
+                  ),
+                  secondaryBackground: Container(
+                    color: Colors.green,
+                    child: const Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: EdgeInsets.only(right: 20.0),
+                        child: Icon(Icons.check, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  child: GestureDetector(
+                    onLongPress: () => _showPlanModal(plan: plan, index: index),
+                    onDoubleTap: () => _deletePlan(index),
+                    child: ListTile(
+                      title: Text(
+                        '${plan.name} [${plan.priority}]',
+                        style: TextStyle(
+                          color: plan.isCompleted ? Colors.grey : Colors.black,
+                          decoration:
+                              plan.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${plan.description} - ${plan.date.toLocal()}'.split(
+                          ' ',
+                        )[0],
+                      ),
+                      tileColor:
+                          plan.isCompleted ? Colors.green[100] : Colors.white,
                     ),
                   ),
                 );
@@ -217,6 +261,10 @@ class _CardGameScreenState extends State<CardGameScreen>
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showPlanModal(),
+        child: const Icon(Icons.add),
       ),
     );
   }
